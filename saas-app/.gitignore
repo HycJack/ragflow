@@ -1,0 +1,14 @@
+# Build / runtime artifacts
+dist/
+node_modules/
+**.npm-cache/
+**/.gocache/
+**/.gopath/
+*.exe
+*.test
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
