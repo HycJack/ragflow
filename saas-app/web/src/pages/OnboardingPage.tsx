@@ -8,7 +8,7 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const orgsQuery = useOrganizations();
   const createOrg = useCreateOrg();
-  const { org, setOrg, setOrganizations } = useWorkspace();
+  const { org, profile, setOrg } = useWorkspace();
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -16,13 +16,17 @@ export default function OnboardingPage() {
 
   const organizations = orgsQuery.data ?? [];
 
-  // When organizations are loaded and one is already selected, go to workspace.
+  // Platform admins belong to the operator console, not the workspace picker.
   useEffect(() => {
-    setOrganizations(organizations);
+    if (profile?.is_platform_admin) {
+      navigate('/admin', { replace: true });
+      return;
+    }
+    // If a persisted org is still valid, go straight to the workspace.
     if (organizations.length > 0 && org) {
       navigate('/workspace/overview', { replace: true });
     }
-  }, [organizations, org, navigate, setOrganizations]);
+  }, [organizations, org, profile?.is_platform_admin, navigate]);
 
   function selectOrg(id: string) {
     const o = organizations.find((x) => x.id === id);
@@ -55,28 +59,35 @@ export default function OnboardingPage() {
     );
   }
 
+  // Invited members already belong to a workspace: pick it, don't create one.
+  if (organizations.length > 0) {
+    return (
+      <div className="auth-page">
+        <div className="card" style={{ width: 440 }}>
+          <div className="card-header">
+            <h1>Welcome aboard</h1>
+            <p>You're a member of a workspace. Choose where to go.</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {organizations.map((o) => (
+              <button key={o.id} type="button" className="btn btn-secondary" onClick={() => selectOrg(o.id)}>
+                {o.name}
+                <span className="muted" style={{ fontWeight: 400 }}>· {o.my_role}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="auth-page">
       <div className="card" style={{ width: 440 }}>
         <div className="card-header">
           <h1>Set up your workspace</h1>
-          <p>Create an organization or pick an existing one.</p>
+          <p>You don't belong to any workspace yet. Create one to get started.</p>
         </div>
-
-        {organizations.length > 0 && (
-          <>
-            <label className="field-title">Your organizations</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-              {organizations.map((o) => (
-                <button key={o.id} type="button" className="btn btn-secondary" onClick={() => selectOrg(o.id)}>
-                  {o.name}
-                  <span className="muted" style={{ fontWeight: 400 }}>· {o.my_role}</span>
-                </button>
-              ))}
-            </div>
-            <hr className="divider" />
-          </>
-        )}
 
         <form onSubmit={handleCreate}>
           <div className="field">

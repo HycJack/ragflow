@@ -6,6 +6,7 @@ export interface Profile {
   nickname: string;
   avatar?: string | null;
   status: string;
+  is_platform_admin: boolean;
   created_at: string;
 }
 
@@ -71,4 +72,27 @@ export interface Plan {
   token_to_parse: number;
   seats: number;
   llm_calls: number;
+}
+
+// ---- Platform admin console ----
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  nickname: string;
+  status: string;
+  is_platform_admin: boolean;
+  org_count: number;
+  created_at: string;
+}
+
+export interface AdminOrg {
+  id: string;
+  name: string;
+  slug: string;
+  plan_code: string;
+  owner_id: string;
+  member_count: number;
+  seat_limit: number;
+  created_at: string;
 }

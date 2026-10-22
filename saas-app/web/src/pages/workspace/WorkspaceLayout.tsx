@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useOrganizations, useLogout } from '@/hooks/queries';
 import { useWorkspace } from '@/store/workspace';
 import { setToken } from '@/api/client';
@@ -9,7 +10,14 @@ export default function WorkspaceLayout() {
   const navigate = useNavigate();
   const orgsQuery = useOrganizations();
   const logout = useLogout();
-  const { org, setOrg, setOrganizations } = useWorkspace();
+  const { org, setOrg, setOrganizations, profile } = useWorkspace();
+
+  // Platform admins live in the operator console, not the user workspace.
+  useEffect(() => {
+    if (profile?.is_platform_admin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [profile?.is_platform_admin, navigate]);
 
   async function handleSwitch(id: string) {
     const next = orgsQuery.data?.find((o) => o.id === id);

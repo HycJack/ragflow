@@ -53,6 +53,15 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	ok(w, true, "success")
 }
 
+// handleMe returns the current user's profile, including platform-admin status.
+func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
+	u := a.requireUser(w, r)
+	if u == nil {
+		return
+	}
+	ok(w, profileOf(u), "success")
+}
+
 // requireUser resolves the current user or writes an error and returns nil.
 func (a *App) requireUser(w http.ResponseWriter, r *http.Request) *entity.User {
 	u, err := a.Auth.GetUserByToken(authToken(r))
@@ -71,5 +80,6 @@ func profileOf(u *entity.User) map[string]any {
 	return map[string]any{
 		"id": u.ID, "email": u.Email, "nickname": u.Nickname,
 		"avatar": u.Avatar, "status": u.Status, "created_at": u.CreatedAt,
+		"is_platform_admin": u.IsPlatformAdmin,
 	}
 }

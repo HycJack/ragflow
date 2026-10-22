@@ -11,6 +11,9 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", a.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", a.handleLogout)
 
+	// Current user (authenticated) + profile incl. platform-admin flag.
+	mux.HandleFunc("GET /api/v1/me", a.handleMe)
+
 	// Plans (public catalog)
 	mux.HandleFunc("GET /api/v1/plans", a.handleListPlans)
 
@@ -35,6 +38,10 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/orgs/{org_id}/usage/current", a.handleCurrentUsage)
 	mux.HandleFunc("GET /api/v1/orgs/{org_id}/usage/events", a.handleListUsageEvents)
 	mux.HandleFunc("POST /api/v1/orgs/{org_id}/usage/consume", a.handleConsume)
+
+	// Platform admin console (is_platform_admin only)
+	mux.HandleFunc("GET /api/v1/admin/orgs", a.handleAdminListOrgs)
+	mux.HandleFunc("GET /api/v1/admin/users", a.handleAdminListUsers)
 
 	return withMiddleware(mux)
 }

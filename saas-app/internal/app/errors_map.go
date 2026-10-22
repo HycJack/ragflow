@@ -11,7 +11,7 @@ import (
 // httpStatusOf maps a service error to an HTTP status code.
 func httpStatusOf(err error) int {
 	switch {
-	case errors.Is(err, service.ErrForbidden):
+	case errors.Is(err, service.ErrForbidden), errors.Is(err, service.ErrNotPlatformAdmin):
 		return http.StatusForbidden
 	case errors.Is(err, service.ErrNotFound):
 		return http.StatusNotFound

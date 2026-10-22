@@ -127,3 +127,74 @@ func TestUsageQuotaExceeded(t *testing.T) {
 		t.Fatalf("unexpected storage meter: %+v", storage)
 	}
 }
+
+func TestSeedAdminIfAbsent(t *testing.T) {
+	store, auth, _, _ := newTestApp()
+
+	// Seeding creates the platform admin account.
+	if err := auth.SeedAdminIfAbsent(); err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	u, err := store.GetUserByEmail(PlatformAdminEmail)
+	if err != nil {
+		t.Fatalf("admin should exist: %v", err)
+	}
+	if !u.IsPlatformAdmin {
+		t.Fatalf("expected IsPlatformAdmin=true, got false")
+	}
+
+	// Login with the documented default credentials works.
+	token, logged, err := auth.LoginByEmail(PlatformAdminEmail, PlatformAdminPassword)
+	if err != nil {
+		t.Fatalf("admin login: %v", err)
+	}
+	if token == "" || !logged.IsPlatformAdmin {
+		t.Fatalf("admin login wrong result")
+	}
+
+	// Idempotent: a second seed does not error and does not duplicate.
+	if err := auth.SeedAdminIfAbsent(); err != nil {
+		t.Fatalf("re-seed should not error: %v", err)
+	}
+	if _, err := store.GetUserByEmail(PlatformAdminEmail); err != nil {
+		t.Fatalf("admin still exists: %v", err)
+	}
+}
+
+func TestInvitedUserCannotCreateOwnOrg(t *testing.T) {
+	store, auth, orgSvc, _ := newTestApp()
+	owner := register(t, auth, "boss@test.dev")
+	member := register(t, auth, "wiz@test.dev")
+
+	// Boss creates a workspace and invites Wiz.
+	org, err := orgSvc.CreateOrg(owner, &CreateOrgRequest{Name: "Boss Co"})
+	if err != nil {
+		t.Fatalf("create org: %v", err)
+	}
+	maxUses := 1
+	inv, err := orgSvc.CreateInvitation(owner.ID, org.ID, &CreateInvitationRequest{
+		Role: entity.RoleMember, MaxUses: &maxUses,
+	})
+	if err != nil {
+		t.Fatalf("create invitation: %v", err)
+	}
+	// Wiz accepts → becomes a member (free user seen as invited seat).
+	if _, err := orgSvc.AcceptInvitation(member, inv.Code); err != nil {
+		t.Fatalf("accept invitation: %v", err)
+	}
+	m, err := store.GetMembership(org.ID, member.ID)
+	if err != nil || m.Role != entity.RoleMember {
+		t.Fatalf("expected member role, got %+v err=%v", m, err)
+	}
+
+	// Now Wiz tries to self-provision an organization → must be rejected.
+	if _, err := orgSvc.CreateOrg(member, &CreateOrgRequest{Name: "Wiz Own Org"}); err == nil {
+		t.Fatalf("invited member should NOT be able to create their own org")
+	}
+
+	// A brand-new free user (no memberships) can still create an org.
+	fresh := register(t, auth, "fresh@test.dev")
+	if _, err := orgSvc.CreateOrg(fresh, &CreateOrgRequest{Name: "Fresh Org"}); err != nil {
+		t.Fatalf("free user should be able to create an org: %v", err)
+	}
+}

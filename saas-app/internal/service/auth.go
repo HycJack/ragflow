@@ -5,6 +5,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -44,6 +45,48 @@ type RegisterRequest struct {
 type Session struct {
 	Token    string             `json:"token"`
 	Profile  map[string]any      `json:"profile"`
+}
+
+// PlatformAdminEmail / PlatformAdminPassword are the default platform admin
+// credentials. A production deployment should override these via environment
+// variables (see SeedAdminIfAbsent).
+const (
+	PlatformAdminEmail    = "admin@ragflow.dev"
+	PlatformAdminPassword = "admin123"
+)
+
+// SeedAdminIfAbsent creates the platform-level administrator on startup when
+// no account with PlatformAdminEmail exists. It is idempotent and never
+// overwrites an existing account. Credentials can be overridden via
+// SAAS_ADMIN_EMAIL / SAAS_ADMIN_PASSWORD.
+func (s *AuthService) SeedAdminIfAbsent() error {
+	email := PlatformAdminEmail
+	password := PlatformAdminPassword
+	if v := os.Getenv("SAAS_ADMIN_EMAIL"); v != "" {
+		email = v
+	}
+	if v := os.Getenv("SAAS_ADMIN_PASSWORD"); v != "" {
+		password = v
+	}
+	if _, err := s.store.GetUserByEmail(email); err == nil {
+		return nil // already exists
+	}
+	hash, err := crypto.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	u := &entity.User{
+		Email:           email,
+		Nickname:        "Platform Admin",
+		PasswordHash:    hash,
+		Status:          "1",
+		IsPlatformAdmin: true,
+		CreatedAt:       time.Now(),
+	}
+	if err := s.store.CreateUser(u); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Register creates a user and optionally a personal organization.

@@ -3,6 +3,8 @@
 
 import { api } from '@/api/client';
 import type {
+  AdminOrg,
+  AdminUser,
   Invitation,
   Member,
   Organization,
@@ -88,5 +90,15 @@ export const usageService = {
   },
   consume(orgId: string, meter: string, amount: number) {
     return api.post<boolean>(`/orgs/${orgId}/usage/consume`, { meter, amount });
+  },
+};
+
+// ---- Platform admin ----
+export const adminService = {
+  users() {
+    return api.get<AdminUser[]>('/admin/users');
+  },
+  orgs() {
+    return api.get<AdminOrg[]>('/admin/orgs');
   },
 };

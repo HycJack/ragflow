@@ -1,9 +1,13 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { getToken } from '@/api/client';
-import { useCurrentOrg } from '@/store/workspace';
+import { useCurrentOrg, useProfile } from '@/store/workspace';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import OnboardingPage from '@/pages/OnboardingPage';
+import AdminLayout from '@/pages/admin/AdminLayout';
+import AdminOverviewPage from '@/pages/admin/AdminOverviewPage';
+import AdminOrgsPage from '@/pages/admin/AdminOrgsPage';
+import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import WorkspaceLayout from '@/pages/workspace/WorkspaceLayout';
 import OverviewPage from '@/pages/workspace/OverviewPage';
 import MembersPage from '@/pages/workspace/MembersPage';
@@ -14,6 +18,15 @@ import BillingPage from '@/pages/workspace/BillingPage';
 function RequireAuth({ children }: { children: JSX.Element }) {
   if (!getToken()) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+/** Require platform-admin privileges for the admin console. */
+function RequireAdmin({ children }: { children: JSX.Element }) {
+  const profile = useProfile();
+  if (!profile?.is_platform_admin) {
+    return <Navigate to="/onboarding" replace />;
   }
   return children;
 }
@@ -41,6 +54,20 @@ export default function App() {
           </RequireAuth>
         }
       />
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminLayout />
+            </RequireAdmin>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<AdminOverviewPage />} />
+        <Route path="orgs" element={<AdminOrgsPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
+      </Route>
       <Route
         path="/workspace"
         element={

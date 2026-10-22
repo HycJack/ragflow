@@ -62,6 +62,16 @@ type CreateOrgRequest struct {
 
 // CreateOrg creates a workspace owned by the user.
 func (s *OrganizationService) CreateOrg(user *entity.User, req *CreateOrgRequest) (*OrganizationView, error) {
+	// A user who has already been invited into a workspace (holds a non-owner
+	// seat) is not allowed to bootstrap their own organization. They belong to
+	// that workspace as a member rather than self-provisioning a second one
+	// where they would be owner. A brand-new user (no memberships) or an
+	// existing owner may still create organizations.
+	for _, m := range s.store.ListMembershipsByUser(user.ID) {
+		if m.Role != entity.RoleOwner {
+			return nil, fmt.Errorf("you are already a member of a workspace; you cannot create your own organization")
+		}
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, fmt.Errorf("organization name is required")

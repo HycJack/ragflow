@@ -3,6 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  adminService,
   authService,
   orgService,
   planService,
@@ -13,6 +14,8 @@ export const QueryKeys = {
   plans: () => ['plans'] as const,
   orgs: () => ['orgs'] as const,
   org: (orgId: string) => ['org', orgId] as const,
+  adminUsers: () => ['admin', 'users'] as const,
+  adminOrgs: () => ['admin', 'orgs'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
   invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,
   usage: (orgId: string) => ['org', orgId, 'usage'] as const,
@@ -67,6 +70,22 @@ export function useUsageEvents(orgId: string, meter?: string) {
     queryKey: QueryKeys.usageEvents(orgId, meter),
     queryFn: () => usageService.events(orgId, meter),
     enabled: Boolean(orgId),
+  });
+}
+
+// ---- Platform admin queries ----
+
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: QueryKeys.adminUsers(),
+    queryFn: () => adminService.users(),
+  });
+}
+
+export function useAdminOrgs() {
+  return useQuery({
+    queryKey: QueryKeys.adminOrgs(),
+    queryFn: () => adminService.orgs(),
   });
 }
 

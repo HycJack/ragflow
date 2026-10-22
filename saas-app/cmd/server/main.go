@@ -23,6 +23,9 @@ func main() {
 	}
 
 	a := app.New()
+	if err := a.Auth.SeedAdminIfAbsent(); err != nil {
+		log.Fatalf("failed to seed platform admin: %v", err)
+	}
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           a.Routes(),

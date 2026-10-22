@@ -14,6 +14,7 @@ type App struct {
 	Auth          *service.AuthService
 	Organizations *service.OrganizationService
 	Usage         *service.UsageService
+	Admin         *service.PlatformAdminService
 }
 
 // New builds and wires the application.
@@ -27,5 +28,6 @@ func New() *App {
 		Auth:          service.NewAuthService(store, plans),
 		Organizations: orgSvc,
 		Usage:         service.NewUsageService(store, orgSvc),
+		Admin:         service.NewPlatformAdminService(store, plans),
 	}
 }

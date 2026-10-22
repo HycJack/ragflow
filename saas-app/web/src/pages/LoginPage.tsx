@@ -22,7 +22,7 @@ export default function LoginPage() {
         onSuccess: (res) => {
           setToken(res.token);
           setProfile(res.profile);
-          navigate('/onboarding');
+          navigate(res.profile.is_platform_admin ? '/admin' : '/onboarding');
         },
         onError: (err) => setError((err as Error).message),
       },

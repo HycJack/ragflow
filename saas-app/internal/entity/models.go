@@ -24,13 +24,14 @@ const (
 
 // User is a platform account.
 type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	Nickname     string    `json:"nickname"`
-	Avatar       *string   `json:"avatar,omitempty"`
-	Status       string    `json:"status"` // "1" active, "0" disabled
-	CreatedAt    time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	Email           string    `json:"email"`
+	PasswordHash    string    `json:"-"`
+	Nickname        string    `json:"nickname"`
+	Avatar          *string   `json:"avatar,omitempty"`
+	Status          string    `json:"status"` // "1" active, "0" disabled
+	IsPlatformAdmin bool      `json:"is_platform_admin"` // platform-level operator
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // Organization is a SaaS workspace (multi-tenant grouping unit).

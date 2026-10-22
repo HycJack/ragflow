@@ -192,6 +192,28 @@ func (s *Store) ListOrgsByIDs(ids []string) []*entity.Organization {
 	return out
 }
 
+// ListOrgIDs returns the IDs of every organization (platform admin).
+func (s *Store) ListOrgIDs() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ids := make([]string, 0, len(s.orgs))
+	for id := range s.orgs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// ListUsers returns every platform account (platform admin).
+func (s *Store) ListUsers() []*entity.User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*entity.User, 0, len(s.users))
+	for _, u := range s.users {
+		out = append(out, cloneUser(u))
+	}
+	return out
+}
+
 // ---- Memberships ----
 
 // CreateMembership inserts a membership.
