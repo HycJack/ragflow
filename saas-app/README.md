@@ -7,9 +7,10 @@ RBAC, invitations, and usage metering/quota.
 
 This `saas-app/` directory is an **independent** Go module + Vite app. It does
 not import the RAGFlow codebase and runs with **zero external Go dependencies**
-(stdlib `net/http` + in-memory store), so you can build and run it offline.
+(stdlib `net/http` + a durable file-backed store), so you can build and run it
+offline.
 
-## What's included (user workspace slice)
+## What's included
 
 | Backend (Go) | Frontend (React + Vite) |
 |---|---|
@@ -19,6 +20,8 @@ not import the RAGFlow codebase and runs with **zero external Go dependencies**
 | Invitations: create / list / accept (register-with-code) | Invite dialog + copy-link + list |
 | Usage: current snapshot + events + quota consume | Overview usage cards · recent activity |
 | Plans catalog (free / pro / enterprise) | Billing page · plan comparison |
+| Platform admin: user/org listing, disable user, change plan, delete org | Admin console at `/admin` (Overview / Organizations / Users) |
+| Durable store: atomic JSON snapshot, survives restart | — |
 
 ## Architecture
 
@@ -27,10 +30,11 @@ saas-app/
 ├── cmd/server/            Go entrypoint (net/http, Go 1.22+ pattern routing)
 ├── internal/
 │   ├── entity/            domain models (User, Organization, Membership, ...)
-│   ├── dao/               data-access layer (in-memory Store)
-│   ├── service/           business logic + RBAC + quota (Auth, Organization, Usage)
+│   ├── dao/               data-access layer (Store) + JSON snapshot persistence
+│   ├── service/           business logic + RBAC + quota (Auth, Organization, Usage, Admin)
 │   ├── app/               wiring + HTTP handlers + routes + CORS
 │   └── crypto/            password hashing / tokens (stdlib)
+├── data/                  runtime store file (git-ignored)
 └── web/                   React + TypeScript + Vite frontend
 ```
 
@@ -58,11 +62,28 @@ npm run dev                  # http://localhost:5173 (proxies /api → :8080)
 Then open http://localhost:5173, register an account, create a workspace, and
 invite a teammate from the Members page.
 
+The platform admin console lives at http://localhost:5173/admin and is seeded on
+first boot:
+
+| Env var | Default |
+|---|---|
+| `SAAS_ADMIN_EMAIL` | `admin@ragflow.dev` |
+| `SAAS_ADMIN_PASSWORD` | `admin123` |
+| `SAAS_DATA_FILE` | `data/saas-store.json` (empty string = memory-only) |
+
+## Persistence
+
+Every mutation rewrites `data/saas-store.json` through a temporary file that is
+fsynced and then atomically renamed over the previous snapshot, so a crash can
+never leave a half-written store. Only primary records are stored; the in-memory
+indexes (email, slug, invite code, memberships, usage periods) are rebuilt on
+load. Reset the environment by deleting that file.
+
 ## Tests
 
 ```bash
 cd saas-app
-go test ./...
+go test ./...                # dao persistence, service RBAC/quota, HTTP routes
 # web
 cd web && npm run type-check && npm run build
 ```
@@ -72,7 +93,8 @@ cd web && npm run type-check && npm run build
 - **Password hashing** in `internal/crypto` uses salted+iterated SHA-256 so the
   slice runs offline. Swap for argon2id/bcrypt (`golang.org/x/crypto`) in
   production.
-- The in-memory `dao.Store` is non-persistent; add a real DB backend before any
-  production use.
-- Quota `Consume` is atomic in the in-memory store; the parallel SQL design
+- **Persistence** is a single-file snapshot: correct and crash-safe, but O(size)
+  per write. Put a real DB behind `dao.Store` before any production use; the
+  method signatures are already shaped for it.
+- Quota `Consume` is atomic in the store; the parallel SQL design
   (`UPDATE ... WHERE used + ? <= ?`) is documented in `internal/service/usage.go`.

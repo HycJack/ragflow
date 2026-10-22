@@ -10,7 +10,10 @@ import (
 
 // httpStatusOf maps a service error to an HTTP status code.
 func httpStatusOf(err error) int {
+	var badInput service.ValidationError
 	switch {
+	case errors.As(err, &badInput):
+		return http.StatusBadRequest
 	case errors.Is(err, service.ErrForbidden), errors.Is(err, service.ErrNotPlatformAdmin):
 		return http.StatusForbidden
 	case errors.Is(err, service.ErrNotFound):

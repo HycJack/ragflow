@@ -42,6 +42,13 @@ func (s *PlanService) Plan(code string) entity.Plan {
 	return s.plans["free"]
 }
 
+// Has reports whether code names a real plan. Plan falls back to free for
+// unknown codes, which is right for display but wrong for validating input.
+func (s *PlanService) Has(code string) bool {
+	_, ok := s.plans[code]
+	return ok
+}
+
 // List returns all plans in a stable order.
 func (s *PlanService) List() []entity.Plan {
 	order := []string{"free", "pro", "enterprise"}

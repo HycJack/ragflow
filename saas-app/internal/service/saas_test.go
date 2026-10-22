@@ -198,3 +198,74 @@ func TestInvitedUserCannotCreateOwnOrg(t *testing.T) {
 		t.Fatalf("free user should be able to create an org: %v", err)
 	}
 }
+
+func TestPlatformAdminOperations(t *testing.T) {
+	store, auth, orgSvc, _ := newTestApp()
+	if err := auth.SeedAdminIfAbsent(); err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	admin, err := store.GetUserByEmail(PlatformAdminEmail)
+	if err != nil {
+		t.Fatalf("load admin: %v", err)
+	}
+	adminSvc := NewPlatformAdminService(store, NewPlanService())
+
+	owner := register(t, auth, "target@test.dev")
+	org, err := orgSvc.CreateOrg(owner, &CreateOrgRequest{Name: "Target Co"})
+	if err != nil {
+		t.Fatalf("create org: %v", err)
+	}
+
+	// A non-admin cannot drive any of these.
+	if err := adminSvc.SetUserStatus(owner, owner.ID, "0"); err == nil {
+		t.Fatalf("non-admin should not change user status")
+	}
+
+	// Disable, then confirm the account is blocked at login.
+	if err := adminSvc.SetUserStatus(admin, owner.ID, "0"); err != nil {
+		t.Fatalf("disable user: %v", err)
+	}
+	if _, _, err := auth.LoginByEmail("target@test.dev", "secret123"); err == nil {
+		t.Fatalf("disabled user should not be able to log in")
+	}
+	if err := adminSvc.SetUserStatus(admin, owner.ID, "1"); err != nil {
+		t.Fatalf("re-enable user: %v", err)
+	}
+	if _, _, err := auth.LoginByEmail("target@test.dev", "secret123"); err != nil {
+		t.Fatalf("re-enabled user should log in: %v", err)
+	}
+
+	// A platform administrator cannot be disabled through the console.
+	if err := adminSvc.SetUserStatus(admin, admin.ID, "0"); err == nil {
+		t.Fatalf("disabling a platform administrator should be refused")
+	}
+
+	// Plan changes are validated and applied.
+	if err := adminSvc.SetOrgPlan(admin, org.ID, "nope"); err == nil {
+		t.Fatalf("unknown plan should be rejected")
+	}
+	if err := adminSvc.SetOrgPlan(admin, org.ID, "pro"); err != nil {
+		t.Fatalf("set plan: %v", err)
+	}
+	view, err := orgSvc.ViewFor(owner.ID, org.ID)
+	if err != nil {
+		t.Fatalf("view org: %v", err)
+	}
+	if view.PlanCode != "pro" || view.SeatLimit != 20 {
+		t.Fatalf("plan not applied: plan=%s seats=%d", view.PlanCode, view.SeatLimit)
+	}
+
+	// Deleting an org cascades memberships.
+	if err := adminSvc.DeleteOrg(admin, org.ID); err != nil {
+		t.Fatalf("delete org: %v", err)
+	}
+	if _, err := store.GetOrgByID(org.ID); err == nil {
+		t.Fatalf("org should be gone")
+	}
+	if _, err := store.GetMembership(org.ID, owner.ID); err == nil {
+		t.Fatalf("memberships should be gone")
+	}
+	if orgs, err := adminSvc.ListOrgs(admin); err != nil || len(orgs) != 0 {
+		t.Fatalf("org list should be empty: %+v err=%v", orgs, err)
+	}
+}

@@ -431,3 +431,45 @@ GET /admin/version
 | **Phase 5** | 治理：RBAC 强化、审计、欠费软暂停、操作日志 | `roles.tsx`/`monitoring.tsx` 企业门控能力 |
 
 > 遵循 AGENTS.md：后端新代码走 **Go**（`internal/`），不新增 Python；新前端页面遵循 `web/` 约定；测试按单元/集成/e2e 分级并保留 Qtty 关键路径（用量原子扣减）单测。
+
+---
+
+## 9. 可运行切片 `saas-app/` 的实现状态
+
+上面 1–8 节是**目标设计**（含 SQL/GORM、bcrypt、独立 admin JWT、套餐 CRUD）。仓库内的 `saas-app/` 是一个可运行的纵向切片，刻意与目标设计存在差异，原因记录在此，避免把切片误读成"设计未完成"。
+
+### 9.1 与目标设计的偏差及原因
+
+| 目标设计 | 切片实现 | 原因 |
+|---|---|---|
+| MySQL/PostgreSQL + GORM | 纯标准库快照持久化（`internal/dao/persist.go`） | 构建环境无法访问 Go module 代理，无法引入任何第三方驱动 |
+| bcrypt / argon2 | 标准库 `sha256` + 随机盐 + 10 万次迭代（`internal/crypto`） | 同上；`PasswordHash` 仍按 `json:"-"` 隐藏 |
+| JWT + 独立 admin 登录 | 随机 opaque token + `is_platform_admin` 门控 | 切片阶段够用；换 JWT 只需替换 `AuthService` |
+| 套餐 CRUD（`admin/plans.tsx`） | 只读套餐目录 + 组织改套餐 | 套餐表尚未可写 |
+| 邮箱验证 / 找回密码 / 计费 | 未实现 | 属 Phase 3/5 |
+
+### 9.2 持久化模型
+
+- 落盘文件：`saas-app/data/saas-store.json`（`SAAS_DATA_FILE` 可改，设为空串则纯内存）。
+- 每次写操作生成整库快照 → 写临时文件 → `fsync` → 原子 `rename` 覆盖。崩溃只会看到旧快照或新快照，不会看到半截文件。
+- 只落主表（users / organizations / memberships / invitations / usage_ledger / usage_events），内存索引（email、slug、邀请码、成员、周期分桶）在加载时重建，因此索引不会与文件不一致。
+- 代价是每次写 O(数据量)；切片数据量下可接受，规模化时替换为 SQL 后端——`dao.Store` 的方法签名本就是按 DB 形状设计的，替换面只有这一层。
+
+### 9.3 平台后台当前能力
+
+| 能力 | 状态 |
+|---|---|
+| 概览（组织数 / 用户数 / 活跃用户 / 平台管理员数 / 套餐分布） | ✅ |
+| 用户列表 | ✅ |
+| 停用 / 启用用户 | ✅ 平台管理员自身受保护，不可被停用（防运营后台自锁） |
+| 组织列表 | ✅ |
+| 修改组织套餐 | ✅ 未知套餐返回 400 |
+| 删除组织 | ✅ 级联删除该组织的成员、邀请、用量台账与事件 |
+| 改密 / 删除用户 / 组织详情 / 套餐 CRUD / 用量大盘 | ⬜ 未实现 |
+
+前端入口 `/admin`（`RequireAdmin` 守卫）；平台管理员在登录、onboarding、工作区三处都会被导回后台，不会落进用户侧工作区。
+
+### 9.4 多租户约束
+
+- 受邀用户（持有任意非 owner 席位）**不能**自建组织，因此不能把自己升级成另一个组织的 owner；新注册用户与现有 owner 不受影响。
+- 后端 `CreateOrg` 守卫 + 前端 onboarding 只给"选择组织"、不给"创建组织"表单，两侧一致。

@@ -91,6 +91,37 @@ export function useAdminOrgs() {
 
 // ---- Mutations ----
 
+// ---- Platform admin mutations ----
+
+export function useAdminSetUserStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { userId: string; status: string }) =>
+      adminService.setUserStatus(params.userId, params.status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QueryKeys.adminUsers() }),
+  });
+}
+
+export function useAdminSetOrgPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { orgId: string; planCode: string }) =>
+      adminService.setOrgPlan(params.orgId, params.planCode),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QueryKeys.adminOrgs() }),
+  });
+}
+
+export function useAdminDeleteOrg() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orgId: string) => adminService.deleteOrg(orgId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryKeys.adminOrgs() });
+      queryClient.invalidateQueries({ queryKey: QueryKeys.adminUsers() });
+    },
+  });
+}
+
 export function useCreateOrg() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -48,7 +48,10 @@ func (a *App) handleConsume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Record an audit event regardless.
-	a.Usage.RecordEvent(u.ID, r.PathValue("org_id"), req.Meter, "demo", "", req.Amount)
+	if err := a.Usage.RecordEvent(u.ID, r.PathValue("org_id"), req.Meter, "demo", "", req.Amount); err != nil {
+		returnErr(w, err, false)
+		return
+	}
 	err := a.Usage.Consume(r.PathValue("org_id"), req.Meter, req.Amount)
 	if err != nil {
 		returnErr(w, err, false)

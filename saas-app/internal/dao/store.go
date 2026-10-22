@@ -21,11 +21,13 @@ var (
 	ErrConflict = errors.New("conflict")
 )
 
-// Store is an in-memory, concurrency-safe data store.
+// Store is a concurrency-safe data store. It is always memory-resident; when
+// opened with a path (see Open) every mutation is also persisted to disk.
 type Store struct {
 	mu       sync.RWMutex
 	now      func() time.Time
 	seq      int64
+	path     string // "" = memory-only (see Open)
 	users    map[string]*entity.User
 	orgs     map[string]*entity.Organization
 	byEmail  map[string]string // email -> user id
@@ -97,7 +99,7 @@ func (s *Store) CreateUser(u *entity.User) error {
 	u.ID = s.nextID("usr")
 	s.users[u.ID] = u
 	s.byEmail[u.Email] = u.ID
-	return nil
+	return s.saveLocked()
 }
 
 // GetUserByEmail loads a user by email.
@@ -150,7 +152,7 @@ func (s *Store) CreateOrg(o *entity.Organization) (string, error) {
 	o.ID = s.nextID("org")
 	s.orgs[o.ID] = o
 	s.bySlug[o.Slug] = o.ID
-	return o.ID, nil
+	return o.ID, s.saveLocked()
 }
 
 // GetOrgByID loads an organization.
@@ -228,7 +230,7 @@ func (s *Store) CreateMembership(m *entity.Membership) error {
 	m.ID = s.nextID("mem")
 	s.members[m.OrgID] = append(s.members[m.OrgID], m)
 	s.byMember[m.ID] = m
-	return nil
+	return s.saveLocked()
 }
 
 // GetMembership loads a membership for an org+user.
@@ -289,7 +291,7 @@ func (s *Store) UpdateMemberRole(orgID, userID, role string) error {
 	for _, m := range s.members[orgID] {
 		if m.UserID == userID {
 			m.Role = role
-			return nil
+			return s.saveLocked()
 		}
 	}
 	return ErrNotFound
@@ -302,7 +304,7 @@ func (s *Store) RemoveMembership(orgID, userID string) error {
 	for _, m := range s.members[orgID] {
 		if m.UserID == userID {
 			m.Status = "0"
-			return nil
+			return s.saveLocked()
 		}
 	}
 	return ErrNotFound
@@ -320,7 +322,7 @@ func (s *Store) CreateInvitation(inv *entity.Invitation) (string, error) {
 	inv.ID = s.nextID("inv")
 	s.invites[inv.ID] = inv
 	s.byCode[inv.Code] = inv.ID
-	return inv.ID, nil
+	return inv.ID, s.saveLocked()
 }
 
 // GetInvitationByCode loads an active invitation by code.
@@ -363,7 +365,7 @@ func (s *Store) IncrementInvitationUsed(id string, maxUses int) (bool, error) {
 		return false, nil
 	}
 	inv.UsedCount++
-	return true, nil
+	return true, s.saveLocked()
 }
 
 // ---- Usage ----
@@ -380,7 +382,7 @@ func (s *Store) TryConsumeLedger(orgID, period, meter string, amount, limit int6
 				return false, nil
 			}
 			l.Used += amount
-			return true, nil
+			return true, s.saveLocked()
 		}
 	}
 	if limit >= 0 && amount > limit {
@@ -389,7 +391,7 @@ func (s *Store) TryConsumeLedger(orgID, period, meter string, amount, limit int6
 	l := &entity.UsageLedger{ID: s.nextID("led"), OrgID: orgID, Period: period, Meter: meter, Used: amount}
 	s.ledger[l.ID] = l
 	s.usageBy[key] = append(s.usageBy[key], l)
-	return true, nil
+	return true, s.saveLocked()
 }
 
 // GetLedger returns the current consumption for a period.
@@ -406,11 +408,12 @@ func (s *Store) GetLedger(orgID, period string) []*entity.UsageLedger {
 }
 
 // AppendUsageEvent records a usage/audit event.
-func (s *Store) AppendUsageEvent(orgID string, ev *entity.UsageEvent) {
+func (s *Store) AppendUsageEvent(orgID string, ev *entity.UsageEvent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ev.ID = s.nextID("evt")
 	s.events[orgID] = append([]*entity.UsageEvent{ev}, s.events[orgID]...)
+	return s.saveLocked()
 }
 
 // ListUsageEvents returns usage events for an org (new->old), optionally
@@ -434,6 +437,71 @@ func (s *Store) ListUsageEvents(orgID, meter string, offset, limit int) []*entit
 		out = out[:limit]
 	}
 	return out
+}
+
+// ---- Platform administration ----
+
+// SetUserStatus enables ("1") or disables ("0") an account.
+func (s *Store) SetUserStatus(userID, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.Status = status
+	return s.saveLocked()
+}
+
+// SetOrgPlan moves an organization to another plan.
+func (s *Store) SetOrgPlan(orgID, planCode string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.orgs[orgID]
+	if !ok {
+		return ErrNotFound
+	}
+	o.PlanCode = planCode
+	return s.saveLocked()
+}
+
+// DeleteOrg removes an organization and everything owned by it: memberships,
+// invitations, usage ledger and usage events.
+func (s *Store) DeleteOrg(orgID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.orgs[orgID]
+	if !ok {
+		return ErrNotFound
+	}
+	delete(s.orgs, orgID)
+	delete(s.bySlug, o.Slug)
+
+	for _, m := range s.members[orgID] {
+		delete(s.byMember, m.ID)
+	}
+	delete(s.members, orgID)
+
+	for id, inv := range s.invites {
+		if inv.OrgID == orgID {
+			delete(s.byCode, inv.Code)
+			delete(s.invites, id)
+		}
+	}
+
+	for key := range s.usageBy {
+		if len(key) > len(orgID) && key[:len(orgID)+1] == orgID+"/" {
+			delete(s.usageBy, key)
+		}
+	}
+	for id, l := range s.ledger {
+		if l.OrgID == orgID {
+			delete(s.ledger, id)
+		}
+	}
+	delete(s.events, orgID)
+
+	return s.saveLocked()
 }
 
 // clone helpers return deep-enough copies (slices are fine, they're not shared).

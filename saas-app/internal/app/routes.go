@@ -42,6 +42,9 @@ func (a *App) Routes() http.Handler {
 	// Platform admin console (is_platform_admin only)
 	mux.HandleFunc("GET /api/v1/admin/orgs", a.handleAdminListOrgs)
 	mux.HandleFunc("GET /api/v1/admin/users", a.handleAdminListUsers)
+	mux.HandleFunc("PATCH /api/v1/admin/users/{user_id}/status", a.handleAdminSetUserStatus)
+	mux.HandleFunc("PATCH /api/v1/admin/orgs/{org_id}/plan", a.handleAdminSetOrgPlan)
+	mux.HandleFunc("DELETE /api/v1/admin/orgs/{org_id}", a.handleAdminDeleteOrg)
 
 	return withMiddleware(mux)
 }

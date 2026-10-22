@@ -101,14 +101,14 @@ func (s *UsageService) Consume(orgID, meter string, amount int64) error {
 }
 
 // RecordEvent appends a usage/audit event.
-func (s *UsageService) RecordEvent(userID, orgID, meter, refKind, refID string, amount int64) {
+func (s *UsageService) RecordEvent(userID, orgID, meter, refKind, refID string, amount int64) error {
 	ev := &entity.UsageEvent{
 		OrgID: orgID, UserID: userID, Meter: meter, Amount: amount,
 		RefKind: refKind, RefID: refID,
 		Billable:   isBillable(meter),
 		OccurredAt: time.Now(),
 	}
-	s.store.AppendUsageEvent(orgID, ev)
+	return s.store.AppendUsageEvent(orgID, ev)
 }
 
 // ListEvents lists usage events for an org (paginated, optional meter).

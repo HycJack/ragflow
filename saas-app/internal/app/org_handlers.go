@@ -124,7 +124,11 @@ func (a *App) handleAcceptInvitation(w http.ResponseWriter, r *http.Request) {
 // ---- Plans ----
 
 func (a *App) handleListPlans(w http.ResponseWriter, r *http.Request) {
-	_ = a.requireUser(w, r) // authenticated, but plans are not org-scoped here
+	// Authenticated: the catalog itself is not org-scoped, but only signed-in
+	// callers may read it.
+	if u := a.requireUser(w, r); u == nil {
+		return
+	}
 	ok(w, a.plansList(), "success")
 }
 

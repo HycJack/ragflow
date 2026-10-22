@@ -17,9 +17,13 @@ type App struct {
 	Admin         *service.PlatformAdminService
 }
 
-// New builds and wires the application.
-func New() *App {
-	store := dao.NewStore()
+// New builds and wires the application. storePath is the file the store
+// persists to; an empty path keeps it memory-only.
+func New(storePath string) (*App, error) {
+	store, err := dao.Open(storePath)
+	if err != nil {
+		return nil, err
+	}
 	plans := service.NewPlanService()
 	orgSvc := service.NewOrganizationService(store, plans)
 	return &App{
@@ -29,5 +33,5 @@ func New() *App {
 		Organizations: orgSvc,
 		Usage:         service.NewUsageService(store, orgSvc),
 		Admin:         service.NewPlatformAdminService(store, plans),
-	}
+	}, nil
 }

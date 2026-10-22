@@ -101,4 +101,13 @@ export const adminService = {
   orgs() {
     return api.get<AdminOrg[]>('/admin/orgs');
   },
+  setUserStatus(userId: string, status: string) {
+    return api.patch<boolean>(`/admin/users/${userId}/status`, { status });
+  },
+  setOrgPlan(orgId: string, planCode: string) {
+    return api.patch<boolean>(`/admin/orgs/${orgId}/plan`, { plan_code: planCode });
+  },
+  deleteOrg(orgId: string) {
+    return api.delete<boolean>(`/admin/orgs/${orgId}`);
+  },
 };

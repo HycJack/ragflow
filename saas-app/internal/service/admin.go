@@ -89,3 +89,45 @@ func (s *PlatformAdminService) ListOrgs(actor *entity.User) ([]*AdminOrgView, er
 	}
 	return out, nil
 }
+
+// SetUserStatus enables ("1") or disables ("0") an account. A platform
+// administrator cannot be disabled here: locking the operator console out of
+// its own accounts needs a deliberate out-of-band change, not a UI click.
+func (s *PlatformAdminService) SetUserStatus(actor *entity.User, userID, status string) error {
+	if err := s.ensureAdmin(actor); err != nil {
+		return err
+	}
+	if status != "0" && status != "1" {
+		return invalid("status must be %q or %q", "0", "1")
+	}
+	target, err := s.store.GetUserByID(userID)
+	if err != nil {
+		return ErrNotFound
+	}
+	if target.IsPlatformAdmin {
+		return invalid("cannot change the status of a platform administrator")
+	}
+	return s.store.SetUserStatus(userID, status)
+}
+
+// SetOrgPlan moves an organization onto another plan.
+func (s *PlatformAdminService) SetOrgPlan(actor *entity.User, orgID, planCode string) error {
+	if err := s.ensureAdmin(actor); err != nil {
+		return err
+	}
+	if !s.plans.Has(planCode) {
+		return invalid("unknown plan %q", planCode)
+	}
+	if _, err := s.store.GetOrgByID(orgID); err != nil {
+		return ErrNotFound
+	}
+	return s.store.SetOrgPlan(orgID, planCode)
+}
+
+// DeleteOrg removes an organization and its memberships, invitations and usage.
+func (s *PlatformAdminService) DeleteOrg(actor *entity.User, orgID string) error {
+	if err := s.ensureAdmin(actor); err != nil {
+		return err
+	}
+	return s.store.DeleteOrg(orgID)
+}
